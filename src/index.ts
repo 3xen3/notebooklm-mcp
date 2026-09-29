@@ -153,7 +153,7 @@ class NotebookLMMCPServer {
     this.server = new Server(
       {
         name: "notebooklm-mcp",
-        version: "2.0.1-gemini.1",
+        version: "2.0.1-gemini.2",
       },
       {
         capabilities: {
@@ -191,7 +191,7 @@ class NotebookLMMCPServer {
 
     const activeSettings = this.settingsManager.getEffectiveSettings();
     log.info("🚀 NotebookLM MCP Server initialized");
-    log.info(`  Version: 2.0.1-gemini.1 (Gemini Notebook patch)`);
+    log.info(`  Version: 2.0.1-gemini.2 (Gemini Notebook patch)`);
     log.info(`  Node: ${process.version}`);
     log.info(`  Platform: ${process.platform}`);
     log.info(`  Profile: ${activeSettings.profile} (${this.toolDefinitions.length} tools active)`);
@@ -623,7 +623,7 @@ async function main() {
   // Print banner
   console.error("╔══════════════════════════════════════════════════════════╗");
   console.error("║                                                          ║");
-  console.error("║     NotebookLM MCP Server v2.0.1-gemini.1 (patched)      ║");
+  console.error("║     NotebookLM MCP Server v2.0.1-gemini.2 (patched)      ║");
   console.error("║                                                          ║");
   console.error("║   Chat with Gemini 2.5 through NotebookLM via MCP       ║");
   console.error("║                                                          ║");

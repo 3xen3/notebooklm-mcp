@@ -18,6 +18,7 @@ import type { SharedContextManager } from "./shared-context-manager.js";
 import type { AuthManager } from "../auth/auth-manager.js";
 import { humanType, randomDelay } from "../utils/stealth-utils.js";
 import { snapshotAllResponses } from "../utils/page-utils.js";
+import { Selectors, joinAlt } from "../notebooklm/selectors.js";
 import { waitForStableAnswer, snapshotPriorAnswers } from "../notebooklm/chat.js";
 import {
   extractCitations as extractCitationsFromPage,
@@ -176,6 +177,10 @@ export class BrowserSession {
     }
 
     try {
+      // Gemini Notebook (2026-07+) can open a modal (dark CDK backdrop) on
+      // top of the notebook — e.g. a first-run announcement. Clear it first.
+      await this.dismissOverlays();
+
       // PRIMARY: Exact Python selector - textarea.query-box-input
       log.info("  ⏳ Waiting for chat input (textarea.query-box-input)...");
       await this.page.waitForSelector("textarea.query-box-input", {
@@ -186,8 +191,8 @@ export class BrowserSession {
     } catch {
       // FALLBACK: Python alternative selector
       try {
-        log.info("  ⏳ Trying fallback selector (aria-label)...");
-        await this.page.waitForSelector('textarea[aria-label="Feld für Anfragen"]', {
+        log.info("  ⏳ Trying fallback selector list (locale aria-labels)...");
+        await this.page.waitForSelector(joinAlt(Selectors.chat.queryInput), {
           timeout: 5000, // Python uses 5s for fallback
           state: "visible",
         });
@@ -392,6 +397,10 @@ export class BrowserSession {
       }
       log.success(`  ✅ Captured ${existingResponses.length} existing responses`);
 
+      // Clear any modal / popover that would intercept clicks on the input
+      // (Gemini Notebook first-run dialogs, leftover Add-source backdrops).
+      await this.dismissOverlays();
+
       // Find the chat input
       const inputSelector = await this.findChatInput();
       if (!inputSelector) {
@@ -403,10 +412,33 @@ export class BrowserSession {
 
       log.info(`  ⌨️  Typing question with human-like behavior...`);
       await sendProgress?.("Typing question with human-like behavior...", 2, 5);
-      await humanType(page, inputSelector, question, {
-        withTypos: true,
-        wpm: Math.max(CONFIG.typingWpmMin, CONFIG.typingWpmMax),
-      });
+      const typeQuestion = () =>
+        humanType(page, inputSelector, question, {
+          withTypos: true,
+          wpm: Math.max(CONFIG.typingWpmMin, CONFIG.typingWpmMax),
+        });
+      try {
+        await typeQuestion();
+      } catch (typeError) {
+        // A popup can mount *after* the first dismissal (dialogs animate in
+        // late). Clear it and retry once; if it is still there, report what
+        // it says so the user can close it by hand.
+        const msg = typeError instanceof Error ? typeError.message : String(typeError);
+        if (!/intercepts pointer events|Timeout/i.test(msg)) throw typeError;
+        log.warning("  ⚠️  Chat input click was blocked — dismissing overlays and retrying…");
+        const overlay = await this.dismissOverlays();
+        if (overlay.blocked) {
+          throw new Error(
+            "A NotebookLM popup is blocking the chat input and could not be closed " +
+              "automatically" +
+              (overlay.text ? ` (popup text: "${overlay.text}")` : "") +
+              ". Run ask_question once with show_browser=true and close the popup " +
+              "in the browser window, then ask again.",
+            { cause: typeError }
+          );
+        }
+        await typeQuestion();
+      }
 
       // Small pause before submitting
       await randomDelay(500, 1000);
@@ -542,6 +574,115 @@ export class BrowserSession {
   }
 
   /**
+   * Dismiss CDK overlays (modal dialogs, popovers, backdrops) that sit on top
+   * of the notebook and intercept pointer events.
+   *
+   * Gemini Notebook (2026-07+) opens such overlays e.g. as a first-run
+   * announcement for fresh browser profiles, and can leave a backdrop behind
+   * after the Add-source dialog closes. Strategy per attempt:
+   *   1. Escape (closes most Angular CDK overlays),
+   *   2. force-click the backdrop (closes dialogs without `disableClose`),
+   *   3. click an explicit close / acknowledge button inside the overlay.
+   * Only call this from chat paths — it would also close the Add-source
+   * dialog on purpose.
+   *
+   * Escape + backdrop approach adapted from ChoiWheatley/notebooklm-mcp
+   * (MIT), verified there against the live notebook.google.com UI.
+   *
+   * @returns whether an overlay is still blocking, plus its visible text.
+   */
+  async dismissOverlays(): Promise<{ blocked: boolean; text: string }> {
+    if (!this.page || this.isPageClosedSafe()) return { blocked: false, text: "" };
+    const page = this.page;
+
+    const backdrop = page.locator(".cdk-overlay-backdrop.cdk-overlay-backdrop-showing").first();
+    const anyBackdrop = page.locator(".cdk-overlay-backdrop").first();
+    const popover = page.locator(".cdk-overlay-popover").first();
+    const isBlocking = async (): Promise<boolean> =>
+      (await backdrop.isVisible().catch(() => false)) ||
+      (await anyBackdrop.isVisible().catch(() => false)) ||
+      (await popover.isVisible().catch(() => false));
+
+    // Buttons that only close / acknowledge a popup. Exact-text matches
+    // (`:text-is`) so e.g. "OK" never hits "Notebook".
+    const dismissButtons = [
+      'button[aria-label="Close" i]',
+      'button[aria-label*="close" i]',
+      'button[aria-label*="kapat" i]',
+      'button[aria-label*="schließen" i]',
+      'button[aria-label*="fermer" i]',
+      'button[aria-label*="cerrar" i]',
+      'button[aria-label*="chiudi" i]',
+      'button[aria-label*="fechar" i]',
+      'button[aria-label*="sluiten" i]',
+      'button[aria-label*="閉じる"]',
+      'button:has(mat-icon:text-is("close"))',
+      ...[
+        "Got it",
+        "Anladım",
+        "Tamam",
+        "OK",
+        "Dismiss",
+        "Close",
+        "Kapat",
+        "No thanks",
+        "Hayır, teşekkürler",
+        "Not now",
+        "Şimdi değil",
+        "Skip",
+        "Atla",
+        "Verstanden",
+        "Schließen",
+        "Compris",
+        "Entendido",
+      ].map((t) => `button:text-is("${t}")`),
+    ];
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (!(await isBlocking())) return { blocked: false, text: "" };
+
+      log.info(`  🚪 Dismissing NotebookLM overlay (attempt ${attempt + 1})…`);
+      await page.keyboard.press("Escape").catch(() => undefined);
+      await randomDelay(300, 500);
+      if (!(await isBlocking())) break;
+
+      if (await anyBackdrop.isVisible().catch(() => false)) {
+        await anyBackdrop.click({ force: true, timeout: 1_000 }).catch(() => undefined);
+        await randomDelay(300, 500);
+        if (!(await isBlocking())) break;
+      }
+
+      const container = page.locator(".cdk-overlay-container");
+      for (const sel of dismissButtons) {
+        const btn = container.locator(sel).first();
+        if (await btn.isVisible().catch(() => false)) {
+          log.info(`  🖱️  Clicking overlay button: ${sel}`);
+          await btn.click({ timeout: 2_000 }).catch(() => undefined);
+          await randomDelay(400, 700);
+          break;
+        }
+      }
+    }
+
+    const blocked = await isBlocking();
+    if (!blocked) {
+      log.success("  ✅ No overlay blocking the notebook");
+      return { blocked: false, text: "" };
+    }
+    const text = (
+      await page
+        .locator(".cdk-overlay-container")
+        .innerText({ timeout: 1_000 })
+        .catch(() => "")
+    )
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 300);
+    log.warning(`  ⚠️  Overlay still visible after dismissal attempts: "${text}"`);
+    return { blocked: true, text };
+  }
+
+  /**
    * Find the chat input element
    *
    * IMPORTANT: Matches Python implementation EXACTLY!
@@ -566,6 +707,8 @@ export class BrowserSession {
       'textarea[aria-label*="requete" i]',
       'textarea[aria-label*="consulta" i]',
       'textarea[aria-label*="domanda" i]',
+      // TR — Turkish locale ("Sorgu kutusu").
+      'textarea[aria-label*="sorgu" i]',
     ];
 
     const tryFind = async (): Promise<string | null> => {
@@ -594,6 +737,14 @@ export class BrowserSession {
     // URL up. Try all three remedies and re-probe.
     log.warning("  ⚠️  Chat input not visible, attempting recovery…");
     try {
+      // Most common blocker on Gemini Notebook: a modal / popover overlay.
+      await this.dismissOverlays();
+      hit = await tryFind();
+      if (hit) {
+        log.success(`  ✅ Found chat input after overlay dismissal: ${hit}`);
+        return hit;
+      }
+
       await this.page.keyboard.press("Escape").catch(() => undefined);
       await this.page.keyboard.press("Escape").catch(() => undefined);
       await randomDelay(200, 400);

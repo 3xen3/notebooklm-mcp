@@ -47,6 +47,8 @@ export const Selectors = {
       'textarea[aria-label*="vraag" i]',
       'textarea[aria-label*="質問" i]',
       'textarea[aria-label*="pergunta" i]',
+      // TR — Turkish locale ("Sorgu kutusu").
+      'textarea[aria-label*="sorgu" i]',
     ],
     /**
      * The chat submit button has the *language-bound* aria-label
@@ -122,6 +124,9 @@ export const Selectors = {
      * agnostic; aria-labels listed for older builds without the class.
      */
     addButton: [
+      // Gemini Notebook (2026-09) sources-panel entry point; verified live by
+      // ChoiWheatley/notebooklm-mcp.
+      "button.add-source-link",
       "button.add-source-button",
       'button[aria-label="Add source"]',
       'button[aria-label*="add source" i]',
