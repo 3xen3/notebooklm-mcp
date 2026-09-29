@@ -135,14 +135,17 @@ export const Selectors = {
       'button[aria-label*="ソースを追加" i]',
     ],
     /**
-     * Real Material modal. `[role="dialog"]` is set by Angular synchronously
+     * Real Material modal. Gemini Notebook (2026-07+) also mounts a hidden
+     * emoji picker with `role="dialog"`, so `[role="dialog"]` + `.first()`
+     * grabbed the wrong node and add_source timed out. Anchor on the Material
+     * dialog container instead. Original note: `[role="dialog"]` is set by Angular synchronously
      * the moment the modal mounts — race-free against the `.mdc-dialog--open`
      * animation class and resistant to Material-UI version bumps. Avoid
      * `.cdk-overlay-pane` (matches every dropdown / emoji picker / menu).
      */
-    overlayPane: '[role="dialog"]',
-    overlayInput: '[role="dialog"] input[type="text"]:not([readonly])',
-    overlayTextarea: '[role="dialog"] textarea',
+    overlayPane: ".mat-mdc-dialog-container",
+    overlayInput: '.mat-mdc-dialog-container input[type="text"]:not([readonly])',
+    overlayTextarea: ".mat-mdc-dialog-container textarea",
     /**
      * Source-type buttons in the Add-source overlay. Google ships them
      * *without* aria-labels — the only stable, language-agnostic anchor is
@@ -231,7 +234,7 @@ export const Selectors = {
       'button:has-text("Add")',
       'button:has-text("Submit")',
       'button[type="submit"]',
-      '[role="dialog"] .mdc-dialog__actions button:not(:has-text("Cancel")):not(:has-text("Close")):not(:has-text("Schließen")):not(:has-text("Annuler")):not(:has-text("Cancelar")):not(:has-text("Annulla")):not(:has-text("Annuleren")):not(:has-text("キャンセル"))',
+      '.mat-mdc-dialog-container .mdc-dialog__actions button:not(:has-text("Cancel")):not(:has-text("Close")):not(:has-text("Schließen")):not(:has-text("Annuler")):not(:has-text("Cancelar")):not(:has-text("Annulla")):not(:has-text("Annuleren")):not(:has-text("キャンセル"))',
     ],
   },
 

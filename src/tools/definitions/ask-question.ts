@@ -100,7 +100,7 @@ ${bt}${bt}${bt}
     return `# Conversational Research Partner (NotebookLM • Gemini 2.5 • Session RAG)
 
 ## No Active Notebook
-- Visit https://notebooklm.google to create a notebook and get a share link
+- Visit https://notebook.google.com (Gemini Notebook, formerly NotebookLM) to create a notebook and get a share link
 - Use **add_notebook** to add it to your library (explains how to get the link)
 - Use **list_notebooks** to show available sources
 - Use **select_notebook** to set one active
@@ -144,7 +144,7 @@ export const askQuestionTool: Tool = {
         description:
           "Direct NotebookLM URL — overrides `notebook_id`. Use for ad-hoc " +
           "queries against notebooks not yet in your library. Format: " +
-          "`https://notebooklm.google.com/notebook/<uuid>`.",
+          "`https://notebook.google.com/notebook/<uuid>` (legacy `notebooklm.google.com` links are accepted too).",
       },
       source_format: {
         type: "string",

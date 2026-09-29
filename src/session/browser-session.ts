@@ -39,6 +39,7 @@ import {
 } from "../notebooklm/audio.js";
 import { CONFIG } from "../config.js";
 import { log } from "../utils/logger.js";
+import { normalizeNotebookUrl } from "../utils/notebook-url.js";
 import type { SessionInfo, ProgressCallback } from "../types.js";
 import { RateLimitError } from "../errors.js";
 
@@ -64,7 +65,7 @@ export class BrowserSession {
     this.sessionId = sessionId;
     this.sharedContextManager = sharedContextManager;
     this.authManager = authManager;
-    this.notebookUrl = notebookUrl;
+    this.notebookUrl = normalizeNotebookUrl(notebookUrl);
     this.createdAt = Date.now();
     this.lastActivity = Date.now();
     this.messageCount = 0;

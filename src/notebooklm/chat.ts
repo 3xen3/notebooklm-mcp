@@ -321,6 +321,26 @@ async function readLatestAnswer(page: Page): Promise<string | null> {
 }
 
 /**
+ * Collapsed "Thoughts" panel labels (Gemini Notebook, 2026-07+). Localised
+ * variants included for the most common UI languages.
+ */
+const THOUGHTS_PANEL_LABELS = new Set([
+  "thoughts",
+  "show thinking",
+  "düşünceler",
+  "düşünme sürecini göster",
+  "gedanken",
+  "pensées",
+  "pensamientos",
+  "pensieri",
+  "pensamentos",
+  "gedachten",
+  "思考",
+  "expand_more",
+  "expand_less",
+]);
+
+/**
  * Strip Material-icon labels (`more_vert`, `more_horiz`, …) and orphaned
  * citation markers that NotebookLM occasionally leaks into `innerText`.
  * Only isolated lines are removed — never inline content — so legitimate
@@ -338,6 +358,9 @@ export function sanitizeAnswer(text: string): string {
     if (!line) continue;
 
     if (Selectors.uiControlLabels.has(line)) continue;
+    // Gemini reasoning panel header ("Thoughts" + expand chevron) that the
+    // Gemini Notebook UI renders above the real answer.
+    if (THOUGHTS_PANEL_LABELS.has(line.toLowerCase())) continue;
 
     // Drop lone digits or punctuation flanking a UI-control label
     // (typical citation-marker leak: ["1", "more_vert"]).
