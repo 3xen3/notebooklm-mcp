@@ -153,7 +153,7 @@ class NotebookLMMCPServer {
     this.server = new Server(
       {
         name: "notebooklm-mcp",
-        version: "2.0.1-gemini.2",
+        version: "2.0.1-gemini.3",
       },
       {
         capabilities: {
@@ -191,7 +191,7 @@ class NotebookLMMCPServer {
 
     const activeSettings = this.settingsManager.getEffectiveSettings();
     log.info("🚀 NotebookLM MCP Server initialized");
-    log.info(`  Version: 2.0.1-gemini.2 (Gemini Notebook patch)`);
+    log.info(`  Version: 2.0.1-gemini.3 (Gemini Notebook patch)`);
     log.info(`  Node: ${process.version}`);
     log.info(`  Platform: ${process.platform}`);
     log.info(`  Profile: ${activeSettings.profile} (${this.toolDefinitions.length} tools active)`);
@@ -447,6 +447,8 @@ class NotebookLMMCPServer {
   /**
    * Setup graceful shutdown handlers
    */
+  private requestShutdown?: (signal: string) => void;
+
   private setupShutdownHandlers(): void {
     let shuttingDown = false;
 
@@ -483,6 +485,7 @@ class NotebookLMMCPServer {
     const requestShutdown = (signal: string) => {
       void shutdown(signal);
     };
+    this.requestShutdown = requestShutdown;
 
     process.on("SIGINT", () => requestShutdown("SIGINT"));
     process.on("SIGTERM", () => requestShutdown("SIGTERM"));
@@ -529,6 +532,12 @@ class NotebookLMMCPServer {
       const transport = new StdioServerTransport();
       await this.server.connect(transport);
       log.success("✅ MCP Server connected via stdio");
+      // When the client goes away it usually just closes our stdin (and on
+      // Windows may kill us without a signal). Shut down while we still can,
+      // so the headless Chrome is closed instead of orphaned with the profile
+      // locked.
+      process.stdin.once("end", () => this.requestShutdown?.("stdin closed"));
+      process.stdin.once("close", () => this.requestShutdown?.("stdin closed"));
     }
 
     log.success("🎉 Ready to receive requests from Claude Code!");
@@ -623,7 +632,7 @@ async function main() {
   // Print banner
   console.error("╔══════════════════════════════════════════════════════════╗");
   console.error("║                                                          ║");
-  console.error("║     NotebookLM MCP Server v2.0.1-gemini.2 (patched)      ║");
+  console.error("║     NotebookLM MCP Server v2.0.1-gemini.3 (patched)      ║");
   console.error("║                                                          ║");
   console.error("║   Chat with Gemini 2.5 through NotebookLM via MCP       ║");
   console.error("║                                                          ║");

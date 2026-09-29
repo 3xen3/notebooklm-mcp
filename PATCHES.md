@@ -1,4 +1,4 @@
-# notebooklm-mcp 2.0.1-gemini.2 — unofficial patch on top of v2.0.0
+# notebooklm-mcp 2.0.1-gemini.3 — unofficial patch on top of v2.0.0
 
 Upstream (PleasePrompto/notebooklm-mcp) was archived on 2026-09-10. In July 2026
 Google renamed NotebookLM to **Gemini Notebook** and moved it from
@@ -32,6 +32,14 @@ Changes:
    If the popup survives, the error quotes its text. Escape + backdrop idea
    adapted from ChoiWheatley/notebooklm-mcp (MIT). Also adds the Turkish
    query-box label and the `button.add-source-link` entry point.
+7. **Locked profile after a client restart** (2.0.1-gemini.3) — when the MCP
+   client quits it often kills the server without a catchable signal (always on
+   Windows), leaving the headless Chrome running with the profile locked; the
+   next launch fails with Chrome exit code 21. `src/browser/orphan-chrome.ts`
+   kills Chrome processes whose `--user-data-dir` is exactly our profile before
+   launching (PowerShell/CIM on Windows, `ps` elsewhere). Exit code 21 now also
+   triggers the isolated-profile fallback, and the server shuts down (closing
+   Chrome) when the client closes stdin.
 
 Build note: transpiled with `tsc --noCheck` (no type-check) because the build
 sandbox could not reach the npm registry; the emitted JS was diffed against an

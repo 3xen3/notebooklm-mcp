@@ -19,6 +19,7 @@ import path from "path";
 import { CONFIG, NOTEBOOKLM_AUTH_URL } from "../config.js";
 import { log } from "../utils/logger.js";
 import { isNotebookLmUrl } from "../utils/notebook-url.js";
+import { killOrphanedChrome } from "../browser/orphan-chrome.js";
 import {
   getPreferredChannel,
   isChannelFailure,
@@ -920,6 +921,9 @@ export class AuthManager {
       // CRITICAL: Clear ALL old auth data FIRST (for account switching)
       log.info("🔄 Preparing for new account authentication...");
       await sendProgress?.("Clearing old authentication data...", 1, 10);
+      // A Chrome left over from a previous run keeps the profile locked, which
+      // makes both the wipe below and the launch fail (Windows exit code 21).
+      await killOrphanedChrome(CONFIG.chromeProfileDir);
       await this.clearAllAuthData();
 
       log.info("🚀 Launching persistent browser for interactive setup...");

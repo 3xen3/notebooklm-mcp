@@ -16,6 +16,7 @@ import type { BrowserContext } from "patchright";
 import { chromium } from "patchright";
 import { CONFIG } from "../config.js";
 import { log } from "../utils/logger.js";
+import { killOrphanedChrome } from "../browser/orphan-chrome.js";
 import type { AuthManager } from "../auth/auth-manager.js";
 import {
   getPreferredChannel,
@@ -217,14 +218,21 @@ export class SharedContextManager {
         this.currentProfileDir = isolatedDir;
         this.isIsolatedProfile = true;
       } else {
-        // single or auto → first try base
+        // single or auto → first try base. A Chrome left over from a previous
+        // server run (client quit without a catchable signal) would still hold
+        // the profile lock — close it first.
+        await killOrphanedChrome(baseProfile);
         this.globalContext = await tryLaunch(baseProfile);
         this.currentProfileDir = baseProfile;
         this.isIsolatedProfile = false;
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      const isSingleton = /ProcessSingleton|SingletonLock|profile is already in use/i.test(msg);
+      // Windows reports a locked profile only as Chrome exit code 21.
+      const isSingleton =
+        /ProcessSingleton|SingletonLock|profile is already in use|exitCode=21|exit code 21/i.test(
+          msg
+        );
       if (strategy === "single" || !isSingleton) {
         // hard fail
         if (isSingleton && strategy === "single") {
